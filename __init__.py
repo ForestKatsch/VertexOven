@@ -18,7 +18,7 @@ bl_info = {
     "name": "Vertex Oven",
     "description": "Bake ambient occlusion straight to vertex colors",
     "author": "Forest Katsch",
-    "version": (0, 1, 0),
+    "version": (0, 1, 1),
     "blender": (2, 80, 0),
     "location": "3D View > Object > Vertex Oven",
     "warning": "Warning: this addon is still young, and problems may occur. Make sure you've backed up your Blender file first.",
@@ -175,7 +175,6 @@ class BakeAO:
         return ray[3]
     
     def calculate_vertex_ao(self, vertex):
-        
         """
 Returns a value, 0-1, of how occluded this `vertex` is. Samples are taken for each object; the count is
 determined by `self.operator.sample_count`.
