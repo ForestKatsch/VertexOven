@@ -351,7 +351,7 @@ determined by `self.operator.sample_count`.
         np.random.seed(self.operator.seed)
     
         for i in range(operator.sample_count):
-            self.sample_distribution.append(random_vector())
+            self.sample_distribution.append(BakeAO.random_vector())
 
     def bake(self, vertices=-1):
         """Bakes `vertices` number of vertices. If `vertices` is negative, bakes to completion. This function should be called until it returns `True`."""
@@ -431,13 +431,13 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
     
     color_layer_name: bpy.props.StringProperty(
         name="Layer Name",
-        description="The name of the vertex color layer to store the ambient occlusion data in. If this layer doesn't exist, it will be created.",
+        description="The name of the vertex color layer to store the ambient occlusion data in. If this layer doesn't exist, it will be created",
         default="Ambient Occlusion"
     )
     
     color_invert: bpy.props.BoolProperty(
         name="Invert Color",
-        description="Normally, 1 is fully occluded, and 0 is no occlusion; this option inverts that.",
+        description="Normally, 1 is fully occluded, and 0 is no occlusion; this option inverts that",
         default=True
     )
     
@@ -449,13 +449,13 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
 
     group_name: bpy.props.StringProperty(
         name="Group Name",
-        description="The name of the vertex group to store the ambient occlusion data in. If this layer doesn't exist, it will be created.",
+        description="The name of the vertex group to store the ambient occlusion data in. If this layer doesn't exist, it will be created",
         default="Ambient Occlusion"
     )
 
     weight_invert: bpy.props.BoolProperty(
         name="Invert Vertex Weight",
-        description="Normally, 1 is fully occluded, and 0 is no occlusion; this option inverts that.",
+        description="Normally, 1 is fully occluded, and 0 is no occlusion; this option inverts that",
         default=False
     )
     
@@ -463,26 +463,26 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
     
     max_distance: bpy.props.FloatProperty(
         name="Distance",
-        description="The maximum distance to cast rays to. Making this smaller will improve performance at the cost of less-accurate occlusion for distant faces.",
+        description="The maximum distance to cast rays to. Making this smaller will improve performance at the cost of less-accurate occlusion for distant faces",
         unit="LENGTH",
         default=5.0
     )
 
     power: bpy.props.FloatProperty(
         name="Power",
-        description="The strength of the ambient occlusion. Smaller numbers produce darker, larger areas of occlusion.",
+        description="The strength of the ambient occlusion. Smaller numbers produce darker, larger areas of occlusion",
         default=0.5
     )
 
     seed: bpy.props.IntProperty(
         name="Seed",
-        description="The seed used to generate the random sampling distribution.",
+        description="The seed used to generate the random sampling distribution",
         default=0
     )
 
     sample_count: bpy.props.IntProperty(
         name="Sample Count",
-        description="The number of samples to cast per vertex. The total work done is this multiplied by your vertex count; keep this low to improve performance.",
+        description="The number of samples to cast per vertex. The total work done is this multiplied by your vertex count; keep this low to improve performance",
         default=32
     )
 
@@ -507,6 +507,10 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
         
         elif event.type != "TIMER":
             return {"PASS_THROUGH"}
+
+        if self._bake == None:
+            # Start the bake.
+            self._bake = BakeAO(self, context)
         
         try:
             # Perform 10000 samples every time before updating.
@@ -670,9 +674,6 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
         # This is where the bulk of the work happens.
         self._timer = wm.event_timer_add(time_step=0.1, window=context.window)
 
-        # Start the bake.
-        self._bake = BakeAO(self, context)
-        
         context.window.cursor_set("WAIT")
 
         #bpy.ops.wm.bake_vertex_ao_progress('INVOKE_DEFAULT')
