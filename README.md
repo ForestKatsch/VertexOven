@@ -27,6 +27,10 @@ Baking will take anywhere from a few seconds to multiple minutes; keep an eye on
 
 # Changelog
 
+## v0.1.2
+
+* Fixed normal matrix multiplication issue
+
 ## v0.1.1
 
 * Fixed issue that could occur when Blender called functions in an unexpected order.
