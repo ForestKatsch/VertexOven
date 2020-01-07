@@ -5,7 +5,7 @@
 
 Vertex Oven works with Blender 2.80 and up.
 
-![The operator settings as of v0.1.1]()
+![The operator settings as of v0.1.1](https://raw.githubusercontent.com/ForestKatsch/vertex-oven/master/media/operator-settings.png)
 
 ## Features:
 
