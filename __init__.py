@@ -27,11 +27,14 @@ bl_info = {
 }
 
 import numpy as np
+
 import math
 import mathutils
+
 from mathutils.bvhtree import BVHTree
 from bpy.props import StringProperty, EnumProperty, FloatProperty
 from bpy.types import Operator
+
 import bpy
 
 class BakeError(Exception):
@@ -576,7 +579,11 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
     # Draws a checkmark and the message in the given `layout`.
     def draw_checkmark_icon(self, layout, message):
         row = layout.row()
-        row.label(icon="CHECKMARK", text=message)
+
+        if bpy.app.version <= (2, 81, 0):
+            row.label(icon="BLANK1", text=message)
+        else:
+            row.label(icon="CHECKMARK", text=message)
 
     # This draws the UI for the "Vertex Color Layer"/"Vertex Group" toggle and their options.
     def draw_bake_target(self, layout, name, enabled_prop, name_prop, invert_prop, exists):
