@@ -162,10 +162,10 @@ class BakeAO:
         """Given a distance, returns the "occlusion". This is not physically correct, but looks approximately correct."""
         return math.pow(min(1.0, max(0.0, 1.0 - (distance / max_distance))), power)
     
-    def distance_to_object(self, position, normal, bvh, matrix_inverted):
+    def distance_to_object(self, position, normal, bvh, matrix_inverse, matrix_inverse_3x3):
         
-        position = matrix_inverted @ position
-        normal = matrix_inverted @ normal
+        normal = matrix_inverse_3x3 @ normal
+        position = matrix_inverse @ position
         
         ray = bvh.ray_cast(position, normal, self.operator.max_distance)
     
@@ -181,11 +181,11 @@ determined by `self.operator.sample_count`.
 """
         obj = self.active_object
     
-        normal = obj.matrix_world @ vertex.normal
+        normal = obj.matrix_world.to_3x3() @ vertex.normal
         position = (obj.matrix_world @ vertex.co) + (normal * 0.0001)
     
         occlusion = 0
-    
+
         for sample_point in self.sample_distribution:
         
             # Make sure the samples are in a hemisphere.
@@ -197,7 +197,7 @@ determined by `self.operator.sample_count`.
             distance = self.operator.max_distance
     
             for obj_cache in self.bake_object_cache:
-                sample_distance = self.distance_to_object(position, direction, obj_cache[0], obj_cache[1])
+                sample_distance = self.distance_to_object(position, direction, obj_cache[0], obj_cache[1], obj_cache[2])
                 
                 if sample_distance >= 0:
                     distance = min(sample_distance, distance)
@@ -341,7 +341,7 @@ determined by `self.operator.sample_count`.
         print("{} object(s) contributing to bake".format(len(self.bake_objects)))
     
         # Finally, get all the BVH tree objects from each object.
-        self.bake_object_cache = [(BVHTree.FromObject(bake_obj, depsgraph), bake_obj.matrix_world.inverted()) for bake_obj in self.bake_objects]
+        self.bake_object_cache = [(BVHTree.FromObject(bake_obj, depsgraph), bake_obj.matrix_world.inverted(), bake_obj.matrix_world.inverted().to_3x3()) for bake_obj in self.bake_objects]
 
         # The mesh we're baking from.
         self.active_mesh = self.active_object.data
@@ -600,7 +600,7 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
             return
         
         if exists:
-            self.draw_warning_icon(box, "'{}' exists and will be overwritten".format(getattr(self, name_prop)))
+            self.draw_checkmark_icon(box, "'{}' exists and will be overwritten".format(getattr(self, name_prop)))
         else:
             self.draw_checkmark_icon(box, "'{}' will be created".format(getattr(self, name_prop)))
 
