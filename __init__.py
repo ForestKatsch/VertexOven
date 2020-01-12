@@ -18,7 +18,7 @@ bl_info = {
     "name": "Vertex Oven",
     "description": "Bake ambient occlusion straight to vertex colors",
     "author": "Forest Katsch",
-    "version": (0, 1, 2),
+    "version": (0, 1, 3),
     "blender": (2, 80, 0),
     "location": "3D View > Object > Vertex Oven",
     "warning": "Warning: this addon is still young, and problems may occur. Make sure you've backed up your Blender file first.",
@@ -67,18 +67,25 @@ class BakeOptionsAO(BakeOptions):
     def get_valid_keys(self):
         return [
             "bake_receive_objects",
+            
             "bake_cast_objects",
             "include_self",
+            
             "bake_to_color",
             "color_layer_name",
             "color_invert",
+            
             "bake_to_group",
             "group_name",
             "weight_invert",
+            
             "max_distance",
             "power",
             "seed",
-            "sample_count"
+            "sample_count",
+            
+            "jitter",
+            "jitter_fraction"
         ]
         
 # This never worked right.
@@ -214,6 +221,60 @@ class BakeAO:
             return -1
     
         return ray[3]
+
+    def jitter_vertex(self, vertex, sample):
+        mesh = self.active_mesh
+
+        if not self.options.jitter:
+            return vertex.co
+
+        # Valid faces that we can jitter along.
+        polygons = []
+        
+        for poly in mesh.polygons:
+            vertices = poly.vertices
+
+            # Don't bother handling 
+            if len(vertices) > 4:
+                continue
+            
+            if vertex.index in vertices:
+                polygons.append(poly)
+
+        if len(polygons) == 0:
+            return vertex.co
+
+        # The chosen face we'll jitter along.
+        poly = polygons[np.random.randint(0, len(polygons))]
+
+        edges = []
+
+        for edge_key in poly.edge_keys:
+            edge = mesh.edges[mesh.edge_keys.index(edge_key)]
+            if vertex.index in edge.vertices:
+                edges.append(edge)
+
+        # This should never happen!
+        if len(edges) != 2:
+            return vertex.co
+
+        directions = []
+
+        for edge in edges:
+            other_vertex = edge.vertices[0]
+
+            if other_vertex == vertex.index:
+                other_vertex = edge.vertices[1]
+
+            other_vertex = mesh.vertices[other_vertex]
+                
+            directions.append(vertex.co - other_vertex.co)
+
+        fraction = self.options.jitter_fraction * 0.5
+        
+        offset = (directions[0] * (np.random.uniform() * fraction)) + (directions[1] * (np.random.uniform() * fraction))
+
+        return vertex.co + offset
     
     def calculate_vertex_ao(self, vertex):
         """
@@ -227,8 +288,13 @@ determined by `self.options.sample_count`.
     
         occlusion = 0
 
-        for sample_point in self.sample_distribution:
+        sample_position = position
         
+        for i, sample_point in enumerate(self.sample_distribution):
+
+            if self.options.jitter:
+                sample_position = position + self.jitter_vertex(vertex, i)
+            
             # Make sure the samples are in a hemisphere.
             if sample_point.dot(normal) < 0:
                 direction = sample_point.reflect(normal)
@@ -238,7 +304,7 @@ determined by `self.options.sample_count`.
             distance = self.options.max_distance
     
             for obj_cache in self.bake_object_cache:
-                sample_distance = self.distance_to_object(position, direction, obj_cache[0], obj_cache[1], obj_cache[2])
+                sample_distance = self.distance_to_object(sample_position, direction, obj_cache[0], obj_cache[1], obj_cache[2])
                 
                 if sample_distance >= 0:
                     distance = min(sample_distance, distance)
@@ -380,11 +446,15 @@ determined by `self.options.sample_count`.
         # Create a set of random samples. This dramatically speeds up baking.
         self.sample_distribution = []
 
+        self.random_values = []
+
         # Set our seed.
         np.random.seed(self.options.seed)
     
         for i in range(options.sample_count):
             self.sample_distribution.append(BakeAO.random_vector())
+            
+            self.random_values.append((np.random.uniform(), np.random.uniform()))
 
         self.bake_receive_objects = BakeAO.get_bake_objects(context, options.bake_receive_objects, True)
 
@@ -396,7 +466,7 @@ determined by `self.options.sample_count`.
         context = self.context
         
         depsgraph = context.evaluated_depsgraph_get()
-    
+
         # The object to bake.
         self.active_object = obj
         self.active_mesh = self.active_object.data
@@ -409,6 +479,9 @@ determined by `self.options.sample_count`.
         # Finally, get all the BVH tree objects from each object.
         self.bake_object_cache = [(BVHTree.FromObject(bake_obj, depsgraph), bake_obj.matrix_world.inverted(), bake_obj.matrix_world.inverted().to_3x3()) for bake_obj in self.bake_cast_objects]
 
+        # Make sure to set our seed here, too.
+        np.random.seed(self.options.seed)
+        
         return False
 
     # If possible, switch to baking the next object; returns `True` if no next object exists.
@@ -432,8 +505,6 @@ determined by `self.options.sample_count`.
 
         i = 0
         
-        print("Calculating ambient occlusion... {:03.2f}%".format(self.get_progress_percentage()))
-        
         for vertex in mesh.vertices[self.last_vertex_index:]:
 
             ao_vertex = self.calculate_vertex_ao(vertex)
@@ -448,8 +519,6 @@ determined by `self.options.sample_count`.
                 return False
             
         self.finish_object()
-                
-        print("Calculating ambient occlusion... 100%")
                 
         self.last_vertex_index = 0
         
@@ -576,6 +645,20 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
         default=32
     )
 
+    jitter: bpy.props.BoolProperty(
+        name="Jitter Samples",
+        description="Jitter samples across nearby faces to avoid convex vertices from being lit incorrectly",
+        default=False
+    )
+
+    jitter_fraction: bpy.props.FloatProperty(
+        name="Jitter Fraction",
+        description="How far each sample should travel towards its neighboring vertices; 1.0 will travel halfway to the neighboring vertex",
+        min=0.0,
+        max=1.0,
+        default=0.5
+    )
+
     # The timer is used to call ourselves while the bake is in-progress.
     _timer = None
 
@@ -615,7 +698,12 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
 
             if len(self._bake.bake_receive_objects) > 1:
                 object_progress = " ({}/{}) objects".format(self._bake.bake_receive_objects.index(self._bake.active_object), len(self._bake.bake_receive_objects))
-            self.update_status(context, "Baking vertex ambient occlusion: {:03.1f}%".format(self._bake.get_progress_percentage()) + object_progress)
+
+            message = "Baking vertex ambient occlusion: {:03.1f}%".format(self._bake.get_progress_percentage()) + object_progress
+                
+            self.update_status(context, message)
+
+            print(message)
             
         except BakeError as e:
             self.report({"ERROR"}, e.message)
@@ -714,24 +802,38 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
         # Receiving objects
         
         layout.separator()
-        layout.label(text="Objects Receiving Ambient Occlusion:")
+        #layout.label(text="Receiving Objects:")
         
-        layout.prop(self, "bake_receive_objects", text="")
+        split = layout.split(factor=0.35)
+        split.label(text="Receiving:")
+        
+        row = split.row(align=True)
+        row.prop(self, "bake_receive_objects", text="")
 
         bake_receive_objects = BakeAO.get_bake_objects(context, self.bake_receive_objects, True)
-        layout.label(text="{} object{} receiving ambient occlusion bake".format(len(bake_receive_objects), "s" if len(bake_receive_objects) != 1 else ""))
+
+        if len(bake_receive_objects) > 1:
+            split = layout.split(factor=0.35)
+            split.label(text="")
+        
+            split.label(text="{} object{} receiving ambient occlusion bake".format(len(bake_receive_objects), "s" if len(bake_receive_objects) != 1 else ""))
 
         # Contributing objects
         
         layout.separator()
-        layout.label(text="Objects Contributing to Ambient Occlusion:")
+
+        split = layout.split(factor=0.35)
+        split.label(text="Casting:")
         
-        row = layout.row(align=True)
+        row = split.row(align=True)
         row.prop(self, "bake_cast_objects", text="")
         row.prop(self, "include_self", toggle=True, icon="OBJECT_DATA", text="")
         
+        split = layout.split(factor=0.35)
+        split.label(text="")
+        
         bake_cast_objects = BakeAO.get_bake_objects(context, self.bake_cast_objects, self.include_self)
-        layout.label(text="{} object{} contributing to ambient occlusion bake".format(len(bake_cast_objects), "s" if len(bake_cast_objects) != 1 else ""))
+        split.label(text="{} object{} contributing to bake".format(len(bake_cast_objects), "s" if len(bake_cast_objects) != 1 else ""))
 
         layout.separator()
 
@@ -769,6 +871,13 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
             across_all = " across {} objects".format(len(bake_receive_objects))
 
         layout.label(text="{:,} samples total".format(total_sample_count) + across_all)
+
+        layout.separator()
+
+        #row = layout.split(factor=0.35)
+        #row.prop(self, "jitter")
+        #row.prop(self, "jitter_fraction")
+
 
     @classmethod
     def poll(cls, context):
