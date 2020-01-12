@@ -39,7 +39,7 @@ Baking will take anywhere from a few seconds to multiple minutes; keep an eye on
 
 * Fixed issue that could occur when Blender called functions in an unexpected order.
 * Fixed incorrect invocation of class methods.
-* Fixed missing icon issue occuring with Blender 2.80
+* Fixed missing icon issue occurring with Blender 2.80
 
 ## v0.1.0
 
