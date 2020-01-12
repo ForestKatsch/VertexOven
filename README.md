@@ -9,8 +9,8 @@ Vertex Oven works with Blender 2.80 and up.
 
 ## Features:
 
-* Can bake ambient occlusion to vertex colors and vertex groups
-* ... that's about it, right now.
+* Bakes ambient occlusion to vertex colors and vertex groups
+* Bake to multiple objects at once
 
 ## Installation
 
@@ -44,3 +44,7 @@ Baking will take anywhere from a few seconds to multiple minutes; keep an eye on
 ## v0.1.0
 
 First release.
+
+# License
+
+MIT license; see `LICENSE` file.
