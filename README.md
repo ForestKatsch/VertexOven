@@ -27,6 +27,10 @@ Baking will take anywhere from a few seconds to multiple minutes; keep an eye on
 
 # Changelog
 
+## v0.1.3
+
+* New feature: bake to selected objects or active object (existing behavior)
+
 ## v0.1.2
 
 * Fixed normal matrix multiplication issue
