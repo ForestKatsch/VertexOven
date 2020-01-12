@@ -42,6 +42,45 @@ class BakeError(Exception):
     def __init__(self, message):
         self.message = message
 
+class BakeOptions:
+
+    def __init__(self, valid_keys=None):
+        self.valid_keys = self.get_valid_keys()
+        
+        self.options = {}
+        
+    def get_valid_keys(self):
+        return []
+    
+    def __getattr__(self, key):
+        return self.options[key]
+        
+    def from_operator(self, operator):
+
+        print(self.options)
+
+        for key in self.valid_keys:
+            self.options[key] = getattr(operator, key)
+
+class BakeOptionsAO(BakeOptions):
+
+    def get_valid_keys(self):
+        return [
+            "bake_receive_objects",
+            "bake_cast_objects",
+            "include_self",
+            "bake_to_color",
+            "color_layer_name",
+            "color_invert",
+            "bake_to_group",
+            "group_name",
+            "weight_invert",
+            "max_distance",
+            "power",
+            "seed",
+            "sample_count"
+        ]
+        
 # This never worked right.
 #class ProgressWidget(object):
 #    # Seconds.
@@ -117,16 +156,18 @@ class BakeError(Exception):
 class BakeAO:
     """The primary bake class. Users must run `bake(vertices=<>)` and `finish()` manually."""
 
-    def __init__(self, operator, context):
-        self.operator = operator
+    def __init__(self, options, context):
+        self.options = options
         self.context = context
         
         # The object we're baking at the moment.
         self.active_object = None
-        self.active_mesh = None
+        
+        # The objects that receive ambient occlusion
+        self.bake_receive_objects = []
 
-        # The objects that contribute to ambient occlusion on `self.active_object`.
-        self.bake_objects = []
+        # The objects that contribute to ambient occlusion on the receiving objects
+        self.bake_cast_objects = []
 
         # The vertex we're on. This goes up until it reaches `len(mesh.vertices)`.
         self.last_vertex_index = 0
@@ -167,7 +208,7 @@ class BakeAO:
         normal = matrix_inverse_3x3 @ normal
         position = matrix_inverse @ position
         
-        ray = bvh.ray_cast(position, normal, self.operator.max_distance)
+        ray = bvh.ray_cast(position, normal, self.options.max_distance)
     
         if not ray[0]:
             return -1
@@ -177,7 +218,7 @@ class BakeAO:
     def calculate_vertex_ao(self, vertex):
         """
 Returns a value, 0-1, of how occluded this `vertex` is. Samples are taken for each object; the count is
-determined by `self.operator.sample_count`.
+determined by `self.options.sample_count`.
 """
         obj = self.active_object
     
@@ -194,7 +235,7 @@ determined by `self.operator.sample_count`.
             else:
                 direction = sample_point
     
-            distance = self.operator.max_distance
+            distance = self.options.max_distance
     
             for obj_cache in self.bake_object_cache:
                 sample_distance = self.distance_to_object(position, direction, obj_cache[0], obj_cache[1], obj_cache[2])
@@ -202,7 +243,7 @@ determined by `self.operator.sample_count`.
                 if sample_distance >= 0:
                     distance = min(sample_distance, distance)
     
-            occlusion += self.occlusion_from_distance(distance, self.operator.max_distance, self.operator.power)
+            occlusion += self.occlusion_from_distance(distance, self.options.max_distance, self.options.power)
     
         return occlusion / len(self.sample_distribution)
 
@@ -229,27 +270,30 @@ determined by `self.operator.sample_count`.
         return True
 
     @classmethod
-    def get_bake_objects(cls, context, bake_influence_objects, include_self):
-        """Returns a list of objects that will be baked, given the `bake_influence_objects` mode."""
+    def get_bake_objects(cls, context, bake_objects, include_self=True, active_object=None):
+        """Returns a list of objects that will be baked, given the `bake_objects` mode."""
+
+        if active_object == None:
+            active_object = context.active_object
         
         # Only baking the active object.
-        if bake_influence_objects == "active":
-            objects = [context.active_object]
+        if bake_objects == "active":
+            objects = [active_object]
 
         # Baking only selected objects.
-        elif bake_influence_objects == "selected":
+        elif bake_objects == "selected":
             objects = [obj for obj in context.scene.objects if obj.select_get()]
             
         # Baking the entire scene.
-        elif bake_influence_objects == "scene":
+        elif bake_objects == "scene":
             objects = context.scene.objects
 
         else:
-            print("Oh no, we've been requested to get bake objects, but `bake_influence_objects` is {}".format(bake_influence_objects))
+            print("Oh no, we've been requested to get bake objects, but `bake_objects` is {}".format(bake_objects))
             return []
 
         if not include_self:
-            objects = [obj for obj in objects if obj != context.active_object]
+            objects = [obj for obj in objects if obj != active_object]
 
         return BakeAO.cull_invalid_objects(objects)
         
@@ -269,7 +313,7 @@ determined by `self.operator.sample_count`.
         """Returns Blender's `VertexColors` object."""
         
         mesh = self.active_mesh
-        name = self.operator.color_layer_name
+        name = self.options.color_layer_name
     
         if not mesh.vertex_colors or name not in mesh.vertex_colors:
             layer = mesh.vertex_colors.new()
@@ -284,7 +328,7 @@ determined by `self.operator.sample_count`.
     def get_vertex_group(self):
         """Returns Blender's `VertexGroup` object."""
         obj = self.active_object
-        name = self.operator.group_name
+        name = self.options.group_name
     
         if not obj.vertex_groups or name not in obj.vertex_groups:
             group = obj.vertex_groups.new()
@@ -298,6 +342,7 @@ determined by `self.operator.sample_count`.
     
     def apply_vertex_colors(self):
         """Apply `self.ao_data` to the vertex color layer."""
+        
         mesh = self.active_mesh
         layer = self.get_vertex_color_layer()
         
@@ -306,7 +351,7 @@ determined by `self.operator.sample_count`.
                 vertex = mesh.vertices[index]
                 brightness = self.ao_data[vertex.index]
 
-                if self.operator.color_invert:
+                if self.options.color_invert:
                     brightness = 1 - brightness
                 
                 loop_index = polygon.loop_indices[i]
@@ -319,7 +364,7 @@ determined by `self.operator.sample_count`.
         for vertex_index in self.ao_data:
             weight = self.ao_data[vertex_index]
             
-            if self.operator.weight_invert:
+            if self.options.weight_invert:
                 weight = 1 - weight
                 
             group.add([vertex_index], weight, "REPLACE")
@@ -327,37 +372,61 @@ determined by `self.operator.sample_count`.
     def start(self):
         print("Baking vertex AO...")
         
-        operator = self.operator
+        options = self.options
+        context = self.context
+        
+        depsgraph = context.evaluated_depsgraph_get()
+    
+        # Create a set of random samples. This dramatically speeds up baking.
+        self.sample_distribution = []
+
+        # Set our seed.
+        np.random.seed(self.options.seed)
+    
+        for i in range(options.sample_count):
+            self.sample_distribution.append(BakeAO.random_vector())
+
+        self.bake_receive_objects = BakeAO.get_bake_objects(context, options.bake_receive_objects, True)
+
+        self.start_object(self.bake_receive_objects[0])
+
+    def start_object(self, obj):
+        
+        options = self.options
         context = self.context
         
         depsgraph = context.evaluated_depsgraph_get()
     
         # The object to bake.
-        self.active_object = context.active_object
+        self.active_object = obj
+        self.active_mesh = self.active_object.data
     
         # Objects that we'll check AO on.
-        self.bake_objects = BakeAO.get_bake_objects(context, operator.bake_influence_objects, operator.include_self)
+        self.bake_cast_objects = BakeAO.get_bake_objects(context, options.bake_cast_objects, options.include_self, active_object=self.active_object)
 
-        print("{} object(s) contributing to bake".format(len(self.bake_objects)))
+        print("{} object(s) contributing to bake of '{}'".format(len(self.bake_cast_objects), self.active_object.name))
     
         # Finally, get all the BVH tree objects from each object.
-        self.bake_object_cache = [(BVHTree.FromObject(bake_obj, depsgraph), bake_obj.matrix_world.inverted(), bake_obj.matrix_world.inverted().to_3x3()) for bake_obj in self.bake_objects]
+        self.bake_object_cache = [(BVHTree.FromObject(bake_obj, depsgraph), bake_obj.matrix_world.inverted(), bake_obj.matrix_world.inverted().to_3x3()) for bake_obj in self.bake_cast_objects]
 
-        # The mesh we're baking from.
-        self.active_mesh = self.active_object.data
+        return False
 
-        # Create a set of random samples. This dramatically speeds up baking.
-        self.sample_distribution = []
+    # If possible, switch to baking the next object; returns `True` if no next object exists.
+    def start_next_object(self):
+        if self.active_object == None:
+            return self.start_object(self.bake_receive_objects[0])
+        
+        new_index = self.bake_receive_objects.index(self.active_object) + 1
 
-        # Set our seed.
-        np.random.seed(self.operator.seed)
-    
-        for i in range(operator.sample_count):
-            self.sample_distribution.append(BakeAO.random_vector())
+        if new_index >= len(self.bake_receive_objects):
+            return True
+
+        return self.start_object(self.bake_receive_objects[new_index])
 
     def bake(self, vertices=-1):
         """Bakes `vertices` number of vertices. If `vertices` is negative, bakes to completion. This function should be called until it returns `True`."""
-        operator = self.operator
+        
+        options = self.options
         context = self.context
         mesh = self.active_mesh
 
@@ -377,26 +446,35 @@ determined by `self.operator.sample_count`.
             
             if vertices > 0 and i > vertices:
                 return False
-
+            
+        self.finish_object()
+                
         print("Calculating ambient occlusion... 100%")
-        return True
+                
+        self.last_vertex_index = 0
+        
+        return self.start_next_object()
 
-
-    def finish(self):
-        operator = self.operator
+    def finish_object(self):
+        options = self.options
         context = self.context
 
-        if operator.bake_to_color:
-            print("Applying ambient occlusion to vertex color layer '{}'".format(operator.color_layer_name))
+        if options.bake_to_color:
+            print("Applying ambient occlusion to vertex color layer '{}'".format(options.color_layer_name))
             
             self.apply_vertex_colors()
             
-        if operator.bake_to_group:
-            print("Applying ambient occlusion to vertex group layer '{}'".format(operator.group_name))
+        if options.bake_to_group:
+            print("Applying ambient occlusion to vertex group layer '{}'".format(options.group_name))
             
             self.apply_vertex_groups()
     
-        print("Done!")
+        self.ao_data = {}
+        
+        print("Bake completed on '{}'".format(self.active_object.name))
+
+    def finish(self):
+        print("DONE DONE DONE")
         
 class MESH_OT_bake_vertex_ao(bpy.types.Operator):
     bl_idname = "mesh.bake_vertex_ao"
@@ -406,17 +484,27 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
 
     # Influence
     
-    bake_influence_objects: bpy.props.EnumProperty(
-        name="Objects",
-        description="Select which objects should contribute to ambient occlusion. Objects that are hidden in the viewport don't contribute",
+    bake_receive_objects: bpy.props.EnumProperty(
+        name="Objects Receiving Occlusion",
+        description="Select which objects should receive ambient occlusion.",
         items=[
-            ("scene", "Entire Scene", "Use all visible objects in the scene.", "SCENE_DATA", 0),
-            ("selected", "Selected Objects", "Bakes occlusion from selected objects only.", "RESTRICT_SELECT_OFF", 1),
-            ("active", "Active Object Only", "Bakes occlusion from active object only.", "OBJECT_DATA", 2),
+            ("selected", "Selected Objects", "Bakes ambient occlusion to selected objects only", "RESTRICT_SELECT_OFF", 1),
+            ("active", "Active Object", "Bakes ambient occlusion to active object only", "OBJECT_DATA", 2),
+        ],
+        default="active"
+    )
+        
+    bake_cast_objects: bpy.props.EnumProperty(
+        name="Objects Casting Occlusion",
+        description="Select which objects should contribute to ambient occlusion. Objects that are hidden in the viewport don't cast any occlusion",
+        items=[
+            ("scene", "Entire Scene", "Use all visible objects in the scene", "SCENE_DATA", 0),
+            ("selected", "Selected Objects", "Bakes occlusion from selected objects only", "RESTRICT_SELECT_OFF", 1),
+            ("active", "Active Object Only", "Bakes occlusion from active object only", "OBJECT_DATA", 2),
         ],
         default="scene"
     )
-        
+
     include_self: bpy.props.BoolProperty(
         name="Include Active Object",
         description="Include the active object in ambient occlusion contribution. (This should probably be on.)",
@@ -511,15 +599,23 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
             return {"PASS_THROUGH"}
 
         if self._bake == None:
+
+            options = BakeOptionsAO()
+            options.from_operator(self)
+            
             # Start the bake.
-            self._bake = BakeAO(self, context)
+            self._bake = BakeAO(options, context)
         
         try:
             # Perform 10000 samples every time before updating.
             is_completed = self._bake.bake(10000 / self.sample_count)
 
             # Appears in the lower-left corner.
-            self.update_status(context, "Baking vertex ambient occlusion: {:03.1f}%".format(self._bake.get_progress_percentage()))
+            object_progress = ""
+
+            if len(self._bake.bake_receive_objects) > 1:
+                object_progress = " ({}/{}) objects".format(self._bake.bake_receive_objects.index(self._bake.active_object), len(self._bake.bake_receive_objects))
+            self.update_status(context, "Baking vertex ambient occlusion: {:03.1f}%".format(self._bake.get_progress_percentage()) + object_progress)
             
         except BakeError as e:
             self.report({"ERROR"}, e.message)
@@ -598,11 +694,14 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
 
         if not getattr(self, enabled_prop):
             return
-        
-        if exists:
-            self.draw_checkmark_icon(box, "'{}' exists and will be overwritten".format(getattr(self, name_prop)))
+
+        if self.bake_receive_objects != "active":
+            self.draw_checkmark_icon(box, "'{}' will be created (if necessary) and overwritten".format(getattr(self, name_prop)))
         else:
-            self.draw_checkmark_icon(box, "'{}' will be created".format(getattr(self, name_prop)))
+            if exists:
+                self.draw_checkmark_icon(box, "'{}' exists and will be overwritten".format(getattr(self, name_prop)))
+            else:
+                self.draw_checkmark_icon(box, "'{}' will be created".format(getattr(self, name_prop)))
 
         box.use_property_split = True
         row = box.column()
@@ -612,16 +711,27 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
     def draw(self, context):
         layout = self.layout
         
+        # Receiving objects
+        
         layout.separator()
+        layout.label(text="Objects Receiving Ambient Occlusion:")
+        
+        layout.prop(self, "bake_receive_objects", text="")
 
-        layout.label(text="Contributing Objects:")
+        bake_receive_objects = BakeAO.get_bake_objects(context, self.bake_receive_objects, True)
+        layout.label(text="{} object{} receiving ambient occlusion bake".format(len(bake_receive_objects), "s" if len(bake_receive_objects) != 1 else ""))
+
+        # Contributing objects
+        
+        layout.separator()
+        layout.label(text="Objects Contributing to Ambient Occlusion:")
         
         row = layout.row(align=True)
-        row.prop(self, "bake_influence_objects", text="")
+        row.prop(self, "bake_cast_objects", text="")
         row.prop(self, "include_self", toggle=True, icon="OBJECT_DATA", text="")
         
-        bake_objects = BakeAO.get_bake_objects(context, self.bake_influence_objects, self.include_self)
-        layout.label(text="{} object{} contributing to ambient occlusion bake".format(len(bake_objects), "s" if len(bake_objects) != 1 else ""))
+        bake_cast_objects = BakeAO.get_bake_objects(context, self.bake_cast_objects, self.include_self)
+        layout.label(text="{} object{} contributing to ambient occlusion bake".format(len(bake_cast_objects), "s" if len(bake_cast_objects) != 1 else ""))
 
         layout.separator()
 
@@ -648,9 +758,17 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
         layout.prop(self, "power")
         layout.prop(self, "sample_count")
 
-        total_sample_count = self.sample_count * len(context.active_object.data.vertices)
+        total_sample_count = 0
 
-        layout.label(text="{:,} samples total".format(total_sample_count))
+        for obj in bake_receive_objects:
+            total_sample_count += self.sample_count * len(obj.data.vertices)
+
+        across_all = ""
+
+        if len(bake_receive_objects) > 1:
+            across_all = " across {} objects".format(len(bake_receive_objects))
+
+        layout.label(text="{:,} samples total".format(total_sample_count) + across_all)
 
     @classmethod
     def poll(cls, context):
