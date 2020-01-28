@@ -284,16 +284,19 @@ determined by `self.options.sample_count`.
         obj = self.active_object
     
         normal = obj.matrix_world.to_3x3() @ vertex.normal
-        position = (obj.matrix_world @ vertex.co) + (normal * 0.0001)
+        position = (obj.matrix_world @ vertex.co)
+
+        offset = (normal * 0.0001)
     
         occlusion = 0
 
         sample_position = position
+        sample_position_object = position
         
         for i, sample_point in enumerate(self.sample_distribution):
 
             if self.options.jitter:
-                sample_position = position + self.jitter_vertex(vertex, i)
+                sample_position = sample_position + self.jitter_vertex(vertex, i)
             
             # Make sure the samples are in a hemisphere.
             if sample_point.dot(normal) < 0:
@@ -304,7 +307,12 @@ determined by `self.options.sample_count`.
             distance = self.options.max_distance
     
             for obj_cache in self.bake_object_cache:
-                sample_distance = self.distance_to_object(sample_position, direction, obj_cache[0], obj_cache[1], obj_cache[2])
+                if obj_cache[0] == obj:
+                    sample_position_object = sample_position + offset
+                else:
+                    sample_position_object = sample_position - offset
+
+                sample_distance = self.distance_to_object(sample_position_object, direction, obj_cache[1], obj_cache[2], obj_cache[3])
                 
                 if sample_distance >= 0:
                     distance = min(sample_distance, distance)
@@ -477,7 +485,7 @@ determined by `self.options.sample_count`.
         print("{} object(s) contributing to bake of '{}'".format(len(self.bake_cast_objects), self.active_object.name))
     
         # Finally, get all the BVH tree objects from each object.
-        self.bake_object_cache = [(BVHTree.FromObject(bake_obj, depsgraph), bake_obj.matrix_world.inverted(), bake_obj.matrix_world.inverted().to_3x3()) for bake_obj in self.bake_cast_objects]
+        self.bake_object_cache = [(bake_obj, BVHTree.FromObject(bake_obj, depsgraph), bake_obj.matrix_world.inverted(), bake_obj.matrix_world.inverted().to_3x3()) for bake_obj in self.bake_cast_objects]
 
         # Make sure to set our seed here, too.
         np.random.seed(self.options.seed)
