@@ -18,7 +18,7 @@ bl_info = {
     "name": "Vertex Oven",
     "description": "Bake ambient occlusion straight to vertex colors",
     "author": "Forest Katsch",
-    "version": (0, 1, 3),
+    "version": (0, 1, 4),
     "blender": (2, 80, 0),
     "location": "3D View > Object > Vertex Oven",
     "warning": "Warning: this addon is still young, and problems may occur. Make sure you've backed up your Blender file first.",
