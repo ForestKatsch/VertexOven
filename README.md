@@ -1,7 +1,6 @@
 
-# Vertex Oven for Blender
-
 ![](https://raw.githubusercontent.com/ForestKatsch/VertexOven/master/media/featured-image.png)
+
 [**Vertex Oven**](https://github.com/ForestKatsch/VertexOven/releases) bakes ambient occlusion directly to vertex colors (and, optionally, vertex groups.)
 
 Vertex Oven works with Blender 2.80 and up.
