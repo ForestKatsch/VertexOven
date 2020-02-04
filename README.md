@@ -1,12 +1,12 @@
 
 # Vertex Oven for Blender
 
-![](https://raw.githubusercontent.com/ForestKatsch/vertex-oven/master/media/featured-image.png)
-[**Vertex Oven**](https://github.com/ForestKatsch/vertex-oven/releases) bakes ambient occlusion directly to vertex colors (and, optionally, vertex groups.)
+![](https://raw.githubusercontent.com/ForestKatsch/VertexOven/master/media/featured-image.png)
+[**Vertex Oven**](https://github.com/ForestKatsch/VertexOven/releases) bakes ambient occlusion directly to vertex colors (and, optionally, vertex groups.)
 
 Vertex Oven works with Blender 2.80 and up.
 
-![The operator settings as of v0.1.1](https://raw.githubusercontent.com/ForestKatsch/vertex-oven/master/media/operator-settings.png)
+![The operator settings as of v0.1.1](https://raw.githubusercontent.com/ForestKatsch/VertexOven/master/media/operator-settings.png)
 
 ## Features:
 
@@ -15,7 +15,7 @@ Vertex Oven works with Blender 2.80 and up.
 
 # Installation
 
-* Download the file that looks like `vertex-oven-<version>.zip` from the [Releases page](https://github.com/ForestKatsch/vertex-oven/releases).
+* Download the file that looks like `vertex-oven-<version>.zip` from the [Releases page](https://github.com/ForestKatsch/VertexOven/releases).
 * Open Blender's **Preferences** window and navigate to the **Add-ons** tab
 * Click the **Install** button and select the zip file you downloaded.
 * Enable **Vertex Oven**
@@ -28,7 +28,7 @@ Baking will take anywhere from a few seconds to multiple minutes; keep an eye on
 
 To use the vertex colors in a shader, add an **Attribute** node and type in the name of the vertex color layer (**Ambient Occlusion** by default.)
 Use the **Fac** output as the ambient occlusion value; by default, this ranges from `0.0` (fully occluded) to `1.0` (no occlusion.)
-![Using Vertex Colors in an Eevee or Cycles shader](https://raw.githubusercontent.com/ForestKatsch/vertex-oven/master/media/attribute-node-shader.png)
+![Using Vertex Colors in an Eevee or Cycles shader](https://raw.githubusercontent.com/ForestKatsch/VertexOven/master/media/attribute-node-shader.png)
 
 For a quick preview of vertex colors, you can also enter **Vertex Paint** mode (Ctrl-Tab and select the top option.)
 
