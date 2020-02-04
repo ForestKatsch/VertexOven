@@ -31,6 +31,8 @@ import numpy as np
 import math
 import mathutils
 
+import time
+
 from mathutils.bvhtree import BVHTree
 from bpy.props import StringProperty, EnumProperty, FloatProperty
 from bpy.types import Operator
@@ -181,6 +183,8 @@ class BakeAO:
 
         # self.ao_data is a dictionary of {vertex_index: ambient occlusion}
         self.ao_data = {}
+
+        self.start_time = time.time()
 
         # Start baking.
         self.start()
@@ -551,7 +555,11 @@ determined by `self.options.sample_count`.
         print("Bake completed on '{}'".format(self.active_object.name))
 
     def finish(self):
-        print("DONE DONE DONE")
+        end_time = time.time()
+
+        elapsed = end_time - self.start_time
+        
+        print("Completed bake in {:.2f} seconds".format(elapsed))
         
 class MESH_OT_bake_vertex_ao(bpy.types.Operator):
     bl_idname = "mesh.bake_vertex_ao"
@@ -698,8 +706,8 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
             self._bake = BakeAO(options, context)
         
         try:
-            # Perform 10000 samples every time before updating.
-            is_completed = self._bake.bake(10000 / self.sample_count)
+            # Perform 50000 samples every time before updating.
+            is_completed = self._bake.bake(50000 / self.sample_count)
 
             # Appears in the lower-left corner.
             object_progress = ""
@@ -893,6 +901,9 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
             return False
         
         if context.active_object not in context.selected_objects:
+            return False
+
+        if context.mode != "OBJECT":
             return False
 
         return True
