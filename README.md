@@ -28,6 +28,7 @@ Baking will take anywhere from a few seconds to multiple minutes; keep an eye on
 
 To use the vertex colors in a shader, add an **Attribute** node and type in the name of the vertex color layer (**Ambient Occlusion** by default.)
 Use the **Fac** output as the ambient occlusion value; by default, this ranges from `0.0` (fully occluded) to `1.0` (no occlusion.)
+
 ![Using Vertex Colors in an Eevee or Cycles shader](https://raw.githubusercontent.com/ForestKatsch/VertexOven/master/media/attribute-node-shader.png)
 
 For a quick preview of vertex colors, you can also enter **Vertex Paint** mode (Ctrl-Tab and select the top option.)
