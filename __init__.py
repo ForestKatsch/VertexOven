@@ -87,7 +87,10 @@ class BakeOptionsAO(BakeOptions):
             "sample_count",
             
             "jitter",
-            "jitter_fraction"
+            "jitter_fraction",
+            
+            "ignore_small_objects",
+            "small_object_size",
         ]
         
 # This never worked right.
@@ -183,11 +186,6 @@ class BakeAO:
 
         # self.ao_data is a dictionary of {vertex_index: ambient occlusion}
         self.ao_data = {}
-
-        self.start_time = time.time()
-
-        # Start baking.
-        self.start()
 
     # Returns a value within the range 0..100
     def get_progress_percentage(self):
@@ -348,7 +346,7 @@ determined by `self.options.sample_count`.
         return True
 
     @classmethod
-    def get_bake_objects(cls, context, bake_objects, include_self=True, active_object=None):
+    def get_bake_objects(cls, context, bake_objects, include_self=True, active_object=None, small_object_size=0):
         """Returns a list of objects that will be baked, given the `bake_objects` mode."""
 
         if active_object == None:
@@ -373,10 +371,10 @@ determined by `self.options.sample_count`.
         if not include_self:
             objects = [obj for obj in objects if obj != active_object]
 
-        return BakeAO.cull_invalid_objects(objects)
+        return BakeAO.cull_invalid_objects(objects, small_object_size)
         
     @classmethod
-    def cull_invalid_objects(cls, objects):
+    def cull_invalid_objects(cls, objects, small_object_size=0):
         """Returns the list `objects` without any invalid objects for baking."""
         
         # First, cull all non-meshes. (Without this step, BVHTree generation straight-up crashes Blender.)
@@ -384,6 +382,8 @@ determined by `self.options.sample_count`.
 
         # Next, cull objects that are hidden.
         objects = [obj for obj in objects if obj.visible_get()]
+
+        objects = [obj for obj in objects if obj.dimensions.length > small_object_size]
 
         return objects
 
@@ -450,6 +450,8 @@ determined by `self.options.sample_count`.
     def start(self):
         print("Baking vertex AO...")
         
+        self.start_time = time.time()
+
         options = self.options
         context = self.context
         
@@ -460,6 +462,8 @@ determined by `self.options.sample_count`.
 
         self.random_values = []
 
+        print("Creating sample distribution...")
+        
         # Set our seed.
         np.random.seed(self.options.seed)
     
@@ -468,10 +472,21 @@ determined by `self.options.sample_count`.
             
             self.random_values.append((np.random.uniform(), np.random.uniform()))
 
+        print("Getting receiving objects...")
+        
         self.bake_receive_objects = BakeAO.get_bake_objects(context, options.bake_receive_objects, True)
 
         self.start_object(self.bake_receive_objects[0])
 
+    @classmethod
+    def get_cast_objects(cls, context, options):
+
+        small_object_size = 0
+        if options.ignore_small_objects:
+            small_object_size = options.small_object_size
+            
+        return BakeAO.get_bake_objects(context, options.bake_cast_objects, options.include_self, active_object=context.active_object, small_object_size=small_object_size)
+        
     def start_object(self, obj):
         
         options = self.options
@@ -484,10 +499,12 @@ determined by `self.options.sample_count`.
         self.active_mesh = self.active_object.data
     
         # Objects that we'll check AO on.
-        self.bake_cast_objects = BakeAO.get_bake_objects(context, options.bake_cast_objects, options.include_self, active_object=self.active_object)
+        self.bake_cast_objects = BakeAO.get_cast_objects(self.context, self.options)
 
         print("{} object(s) contributing to bake of '{}'".format(len(self.bake_cast_objects), self.active_object.name))
     
+        print("Creating BVH trees...")
+        
         # Finally, get all the BVH tree objects from each object.
         self.bake_object_cache = [(bake_obj, BVHTree.FromObject(bake_obj, depsgraph), bake_obj.matrix_world.inverted(), bake_obj.matrix_world.inverted().to_3x3()) for bake_obj in self.bake_cast_objects]
 
@@ -640,7 +657,7 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
         name="Distance",
         description="The maximum distance to cast rays to. Making this smaller will improve performance at the cost of less-accurate occlusion for distant faces",
         unit="LENGTH",
-        default=5.0
+        default=3.0
     )
 
     power: bpy.props.FloatProperty(
@@ -661,6 +678,7 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
         default=32
     )
 
+    # Jitter is disabled because it's horrifically slow.
     jitter: bpy.props.BoolProperty(
         name="Jitter Samples",
         description="Jitter samples across nearby faces to avoid convex vertices from being lit incorrectly",
@@ -673,6 +691,19 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
         min=0.0,
         max=1.0,
         default=0.5
+    )
+
+    ignore_small_objects: bpy.props.BoolProperty(
+        name="Skip small objects",
+        description="To improve AO baking performance, ignore any small objects",
+        default=True
+    )
+
+    small_object_size: bpy.props.FloatProperty(
+        name="Object Size",
+        description="Any object smaller than this won't contribute to the final bake.",
+        unit="LENGTH",
+        default=0.1
     )
 
     # The timer is used to call ourselves while the bake is in-progress.
@@ -704,6 +735,7 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
             
             # Start the bake.
             self._bake = BakeAO(options, context)
+            self._bake.start()
         
         try:
             # Perform 50000 samples every time before updating.
@@ -815,6 +847,9 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
     def draw(self, context):
         layout = self.layout
         
+        options = BakeOptionsAO()
+        options.from_operator(self)
+            
         # Receiving objects
         
         layout.separator()
@@ -847,10 +882,13 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
         
         split = layout.split(factor=0.35)
         split.label(text="")
-        
-        bake_cast_objects = BakeAO.get_bake_objects(context, self.bake_cast_objects, self.include_self)
+        bake_cast_objects = BakeAO.get_cast_objects(context, options)
         split.label(text="{} object{} contributing to bake".format(len(bake_cast_objects), "s" if len(bake_cast_objects) != 1 else ""))
 
+        split = layout.split(factor=0.35, align=True)
+        split.prop(self, "ignore_small_objects", toggle=True)
+        split.prop(self, "small_object_size", toggle=True, text="Smaller than")
+        
         layout.separator()
 
         # Bake Target
