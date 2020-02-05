@@ -5,7 +5,7 @@
 
 Vertex Oven works with Blender 2.80 and up.
 
-![The operator settings as of v0.1.1](https://raw.githubusercontent.com/ForestKatsch/VertexOven/master/media/operator-settings.png)
+![The operator settings as of v0.1.4](https://raw.githubusercontent.com/ForestKatsch/VertexOven/master/media/operator-settings.png)
 
 ## Features:
 
@@ -33,6 +33,10 @@ Use the **Fac** output as the ambient occlusion value; by default, this ranges f
 For a quick preview of vertex colors, you can also enter **Vertex Paint** mode (Ctrl-Tab and select the top option.)
 
 # Changelog
+
+## v0.1.5
+
+* Added "Ignore Small Objects" feature to speed up bakes that would otherwise have many small objects contributing
 
 ## v0.1.4
 
