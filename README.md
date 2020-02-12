@@ -62,6 +62,10 @@ For a quick preview of vertex colors, you can also enter **Vertex Paint** mode (
 
 First release.
 
+# Support
+
+If you have any questions about this addon, email me at [forestcgk@gmail.com](mailto:forestcgk@gmail.com).
+
 # License
 
 GPL v3 license; see `LICENSE` file.
