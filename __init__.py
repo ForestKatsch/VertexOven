@@ -21,7 +21,7 @@ bl_info = {
     "version": (0, 1, 5),
     "blender": (2, 80, 0),
     "location": "3D View > Object > Vertex Oven",
-    "warning": "Warning: this addon is still young, and problems may occur. Make sure you've backed up your Blender file first.",
+    "warning": "Warning: this addon is still young, and problems may occur. If you're concerned about this addon, make sure you've backed up your Blender file first.",
     "support": "COMMUNITY",
     "category": "Mesh"
 }
@@ -485,7 +485,9 @@ determined by `self.options.sample_count`.
         if options.ignore_small_objects:
             small_object_size = options.small_object_size
             
-        return BakeAO.get_bake_objects(context, options.bake_cast_objects, options.include_self, active_object=context.active_object, small_object_size=small_object_size)
+        objects = BakeAO.get_bake_objects(context, options.bake_cast_objects, options.include_self, active_object=context.active_object, small_object_size=small_object_size)
+
+        return objects
         
     def start_object(self, obj):
         
