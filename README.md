@@ -12,8 +12,6 @@ Vertex Oven works with Blender 2.80 and up.
 * Bakes ambient occlusion to vertex colors and vertex groups
 * Bake to multiple objects at once
 
-This is the experimental C-module branch of Vertex Oven.
-
 # Installation
 
 The addon is available both on Blender Market for $20, or for free here on GitHub.
