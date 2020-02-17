@@ -18,7 +18,7 @@ bl_info = {
     "name": "Vertex Oven",
     "description": "Bake ambient occlusion straight to vertex colors",
     "author": "Forest Katsch",
-    "version": (0, 1, 5),
+    "version": (0, 1, 6),
     "blender": (2, 80, 0),
     "location": "3D View > Object > Vertex Oven",
     "warning": "Warning: this addon is still young, and problems may occur. If you're concerned about this addon, make sure you've backed up your Blender file first.",
@@ -92,6 +92,14 @@ class BakeOptionsAO(BakeOptions):
             "ignore_small_objects",
             "small_object_size",
         ]
+
+class BakeVertexPoint:
+
+    def __init__(self, position, normal, vertex_index, loop_index):
+        self.position = position
+        self.normal = normal
+        self.vertex_index = vertex_index
+        self.loop_index = loop_index
         
 # This never worked right.
 #class ProgressWidget(object):
@@ -181,15 +189,15 @@ class BakeAO:
         # The objects that contribute to ambient occlusion on the receiving objects
         self.bake_cast_objects = []
 
-        # The vertex we're on. This goes up until it reaches `len(mesh.vertices)`.
-        self.last_vertex_index = 0
+        # The point we're on. This goes up until it reaches `len(self.points_to_bake)`.
+        self.last_point_index = 0
 
         # self.ao_data is a dictionary of {vertex_index: ambient occlusion}
-        self.ao_data = {}
+        self.ao_data = []
 
     # Returns a value within the range 0..100
     def get_progress_percentage(self):
-        return (self.last_vertex_index / len(self.active_mesh.vertices)) * 100
+        return (self.last_point_index / len(self.points_to_bake)) * 100
 
     @classmethod
     def random_vector(cls):
@@ -277,18 +285,22 @@ class BakeAO:
         offset = (directions[0] * (np.random.uniform() * fraction)) + (directions[1] * (np.random.uniform() * fraction))
 
         return vertex.co + offset
+
+    # Returns a hashable string type that uniquely identifies `vertex_index` and `loop_index`.
+    def get_vertex_loop_id(self, vertex_index, loop_index):
+        return str(vertex_index) + ":" + str(loop_index)
     
-    def calculate_vertex_ao(self, vertex):
+    def calculate_vertex_ao(self, position, normal):
         """
 Returns a value, 0-1, of how occluded this `vertex` is. Samples are taken for each object; the count is
 determined by `self.options.sample_count`.
 """
         obj = self.active_object
     
-        normal = obj.matrix_world.to_3x3() @ vertex.normal
-        position = (obj.matrix_world @ vertex.co)
+        normal = obj.matrix_world.to_3x3() @ normal
+        position = (obj.matrix_world @ position)
 
-        offset = (normal * 0.0001)
+        offset = (normal * 0.00001)
     
         occlusion = 0
 
@@ -315,7 +327,7 @@ determined by `self.options.sample_count`.
                     sample_position_object = sample_position - offset
 
                 sample_distance = self.distance_to_object(sample_position_object, direction, obj_cache[1], obj_cache[2], obj_cache[3])
-                
+
                 if sample_distance >= 0:
                     distance = min(sample_distance, distance)
     
@@ -407,12 +419,14 @@ determined by `self.options.sample_count`.
         """Returns Blender's `VertexGroup` object."""
         obj = self.active_object
         name = self.options.group_name
+
+        print(obj.vertex_groups)
     
         if not obj.vertex_groups or name not in obj.vertex_groups:
             group = obj.vertex_groups.new()
             group.name = name
     
-            obj.vertex_groups.active = group
+            #obj.vertex_groups.active = group
     
         group = obj.vertex_groups[name]
     
@@ -424,28 +438,25 @@ determined by `self.options.sample_count`.
         mesh = self.active_mesh
         layer = self.get_vertex_color_layer()
         
-        for polygon in mesh.polygons:
-            for i, index in enumerate(polygon.vertices):
-                vertex = mesh.vertices[index]
-                brightness = self.ao_data[vertex.index]
+        for index, point in enumerate(self.points_to_bake):
+            brightness = self.ao_data[index]
 
-                if self.options.color_invert:
-                    brightness = 1 - brightness
+            if self.options.color_invert:
+                brightness = 1 - brightness
                 
-                loop_index = polygon.loop_indices[i]
-                layer.data[loop_index].color = (brightness, brightness, brightness, 1.0)
+            layer.data[point.loop_index].color = (brightness, brightness, brightness, 1.0)
     
     def apply_vertex_groups(self):
         """Apply `self.ao_data` to the vertex group."""
         group = self.get_vertex_group()
-    
-        for vertex_index in self.ao_data:
-            weight = self.ao_data[vertex_index]
-            
+        
+        for index, point in enumerate(self.points_to_bake):
+            weight = self.ao_data[index]
+
             if self.options.weight_invert:
                 weight = 1 - weight
                 
-            group.add([vertex_index], weight, "REPLACE")
+            group.add([point.vertex_index], weight, "REPLACE")
 
     def start(self):
         print("Baking vertex AO...")
@@ -512,6 +523,23 @@ determined by `self.options.sample_count`.
 
         # Make sure to set our seed here, too.
         np.random.seed(self.options.seed)
+
+        self.points_to_bake = []
+
+        mesh = self.active_mesh
+        mesh.calc_tangents()
+        mesh.calc_normals_split()
+
+        print("Finding all points to be baked...")
+        for poly in mesh.polygons:
+                
+            for poly_vertex_index in range(len(poly.vertices)):
+                vertex_index = poly.vertices[poly_vertex_index]
+                loop_index = poly.loop_indices[poly_vertex_index]
+
+                self.points_to_bake.append(BakeVertexPoint(mesh.vertices[vertex_index].co, mesh.loops[loop_index].normal, vertex_index, loop_index))
+        
+        self.last_point_index = 0
         
         return False
 
@@ -535,23 +563,22 @@ determined by `self.options.sample_count`.
         mesh = self.active_mesh
 
         i = 0
-        
-        for vertex in mesh.vertices[self.last_vertex_index:]:
 
-            ao_vertex = self.calculate_vertex_ao(vertex)
-    
-            self.ao_data[vertex.index] = ao_vertex
+        while self.last_point_index < len(self.points_to_bake):
 
-            self.last_vertex_index += 1
+            point = self.points_to_bake[self.last_point_index]
 
+            self.ao_data.append(self.calculate_vertex_ao(point.position, point.normal))
+            
+            self.last_point_index += 1
             i += 1
-            
-            if vertices > 0 and i > vertices:
+
+            if i > vertices:
                 return False
-            
+
         self.finish_object()
                 
-        self.last_vertex_index = 0
+        self.last_point_index = 0
         
         return self.start_next_object()
 
@@ -569,7 +596,7 @@ determined by `self.options.sample_count`.
             
             self.apply_vertex_groups()
     
-        self.ao_data = {}
+        self.ao_data = []
         
         print("Bake completed on '{}'".format(self.active_object.name))
 

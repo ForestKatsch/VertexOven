@@ -41,6 +41,10 @@ For a quick preview of vertex colors, you can also enter **Vertex Paint** mode (
 
 # Changelog
 
+## v0.1.6
+
+* Added support for face normals; hard-surface ambient occlusion will be much improved. (Thanks to Joseph for reporting this issue!)
+
 ## v0.1.5
 
 * Added "Ignore Small Objects" feature to speed up bakes that would otherwise have many small objects contributing
