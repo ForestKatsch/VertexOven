@@ -1,7 +1,7 @@
 
 ![](https://raw.githubusercontent.com/ForestKatsch/VertexOven/master/media/featured-image.png)
 
-[**Vertex Oven**](https://github.com/ForestKatsch/VertexOven/releases) bakes ambient occlusion directly to vertex colors (and, optionally, vertex groups.)
+[**Vertex Oven**](https://blendermarket.com/products/vertex-oven) bakes ambient occlusion directly to vertex colors (and, optionally, vertex groups.)
 
 Vertex Oven works with Blender 2.80 and up.
 
@@ -14,15 +14,18 @@ Vertex Oven works with Blender 2.80 and up.
 
 # Installation
 
-The addon is available both on Blender Market for $20, or for free here on GitHub.
-
-On GitHub, download the file `vertex-oven-<version>.zip` from the [Releases page](https://github.com/ForestKatsch/VertexOven/releases).
-
----
+The addon is available on [Blender Market for **$20**](https://blendermarket.com/products/vertex-oven).
+Once downloaded, here's how to install the addon:
 
 * Open Blender's **Preferences** window and navigate to the **Add-ons** tab
 * Click the **Install** button and select the zip file you downloaded.
 * Enable **Vertex Oven**
+
+---
+
+To download from GitHub for free, download the file `vertex-oven-<version>.zip` from the [Releases page](https://github.com/ForestKatsch/VertexOven/releases).
+If you find that Vertex Oven improves your workflow, please consider [purchasing it as well](https://blendermarket.com/products/vertex-oven).
+Thank you for considering Vertex Oven!
 
 # How to Use
 
