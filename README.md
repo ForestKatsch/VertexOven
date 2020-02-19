@@ -42,6 +42,10 @@ For a quick preview of vertex colors, you can also enter **Vertex Paint** mode (
 
 # Changelog
 
+## v0.1.7
+
+* Fixed issue that occurred when baking a mesh with ngons.
+
 ## v0.1.6
 
 * Added support for face normals; hard-surface ambient occlusion will be much improved. (Thanks to Joseph for reporting this issue!)
