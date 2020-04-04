@@ -18,7 +18,7 @@ bl_info = {
     "name": "Vertex Oven",
     "description": "Bake ambient occlusion straight to vertex colors",
     "author": "Forest Katsch",
-    "version": (0, 1, 7),
+    "version": (0, 1, 8),
     "blender": (2, 80, 0),
     "location": "3D View > Object > Vertex Oven",
     "warning": "Warning: this addon is still young, and problems may occur. If you're concerned about this addon, make sure you've backed up your Blender file first.",
@@ -76,6 +76,7 @@ class BakeOptionsAO(BakeOptions):
             "bake_to_color",
             "color_layer_name",
             "color_invert",
+            "color_channels",
             
             "bake_to_group",
             "group_name",
@@ -443,8 +444,19 @@ determined by `self.options.sample_count`.
 
             if self.options.color_invert:
                 brightness = 1 - brightness
+
+            color = list(layer.data[point.loop_index].color)
+
+            if "r" in self.options.color_channels:
+                color[0] = brightness
+            if "g" in self.options.color_channels:
+                color[1] = brightness
+            if "b" in self.options.color_channels:
+                color[2] = brightness
+            if "a" in self.options.color_channels:
+                color[3] = brightness
                 
-            layer.data[point.loop_index].color = (brightness, brightness, brightness, 1.0)
+            layer.data[point.loop_index].color = tuple(color)
     
     def apply_vertex_groups(self):
         """Apply `self.ao_data` to the vertex group."""
@@ -661,6 +673,19 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
         default=True
     )
     
+    color_channels: bpy.props.EnumProperty(
+        items=[
+            ("r", "R", "Bake to the red channel", 1),
+            ("g", "G", "Bake to the green channel", 2),
+            ("b", "B", "Bake to the blue channel", 4),
+            ("a", "A", "Bake to the alpha channel", 8),
+        ],
+        name="Channels",
+        description="Only writes bake data to these color channels",
+        options = {"ENUM_FLAG"},
+        default={"r", "g", "b"}
+    )
+    
     bake_to_group: bpy.props.BoolProperty(
         name="Vertex Group",
         description="Write ambient occlusion information to a vertex group",
@@ -845,7 +870,7 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
             row.label(icon="CHECKMARK", text=message)
 
     # This draws the UI for the "Vertex Color Layer"/"Vertex Group" toggle and their options.
-    def draw_bake_target(self, layout, name, enabled_prop, name_prop, invert_prop, exists):
+    def draw_bake_target(self, layout, name, enabled_prop, name_prop, invert_prop, exists, extra_functions=None):
         box = layout.box()
         
         row = box.split(factor=0.35)
@@ -868,8 +893,18 @@ class MESH_OT_bake_vertex_ao(bpy.types.Operator):
                 self.draw_checkmark_icon(box, "'{}' will be created".format(getattr(self, name_prop)))
 
         box.use_property_split = True
-        row = box.column()
-        row.prop(self, invert_prop)
+        split = box.split(factor=0.45)
+        
+        if enabled_prop == "bake_to_color":
+            row = split.row()
+            row.prop(self, "color_channels", text="Channels:")
+        else:
+            split.label(text="")
+            
+        split.prop(self, invert_prop)
+
+        if extra_functions:
+            extra_functions(box)
 
     # Draws the primary UI.
     def draw(self, context):

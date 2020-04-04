@@ -42,6 +42,10 @@ For a quick preview of vertex colors, you can also enter **Vertex Paint** mode (
 
 # Changelog
 
+## v0.1.8
+
+* Added vertex color channel selection option, to only save ambient occlusion to specific channels.
+
 ## v0.1.7
 
 * Fixed issue that occurred when baking a mesh with ngons.
